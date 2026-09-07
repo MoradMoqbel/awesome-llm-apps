@@ -1,8 +1,9 @@
 import streamlit as st
-from crewai import Agent, Task, Crew, LLM
+from crewai import Agent, Task, Crew
 from crewai.process import Process
 from crewai_tools import SerperDevTool
 import os
+from langchain_anthropic import ChatAnthropic
 
 # Streamlit app setup
 st.set_page_config(page_title="AI Meeting Agent 📝", layout="wide")
@@ -19,7 +20,7 @@ if anthropic_api_key and serper_api_key:
     os.environ["ANTHROPIC_API_KEY"] = anthropic_api_key
     os.environ["SERPER_API_KEY"] = serper_api_key
 
-    claude = LLM(model="claude-3-5-sonnet-20240620", temperature= 0.7, api_key=anthropic_api_key)
+    claude = ChatAnthropic(model="claude-3-5-sonnet-20240620", temperature=0.7, anthropic_api_key=anthropic_api_key)
     search_tool = SerperDevTool()
 
     # Input fields
@@ -165,7 +166,7 @@ if anthropic_api_key and serper_api_key:
     # Run the crew when the user clicks the button
     if st.button("Prepare Meeting"):
         with st.spinner("AI agents are preparing your meeting..."):
-            result = meeting_prep_crew.kickoff()        
+            result = meeting_prep_crew.kickoff()
         st.markdown(result)
 
     st.sidebar.markdown("""
