@@ -5,6 +5,7 @@ from typing import List
 
 import streamlit as st
 from google import genai
+from google.genai import types
 import bs4
 from agno.agent import Agent
 from agno.models.google import Gemini
@@ -31,10 +32,10 @@ class GeminiEmbedder(Embeddings):
     def embed_query(self, text: str) -> List[float]:
         response = self.client.models.embed_content(
             model=self.model,
-            content=text,
-            task_type="retrieval_document"
+            contents=text,
+            config=types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT")
         )
-        return response['embedding']
+        return response.embeddings[0].values
 
 
 # Constants
