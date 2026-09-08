@@ -33,6 +33,47 @@ ALLOWED_EXTENSIONS = {
 sessions: Dict[str, dict] = {}
 
 
+async def _cleanup_expired_sessions():
+    """Periodically remove sessions older than SESSION_TTL."""
+    while True:
+        await asyncio.sleep(300)  # every 5 minutes
+        now = time.time()
+        expired = [
+            sid for sid, s in sessions.items()
+            if now - s.get("created_at", now) > SESSION_TTL
+            and s.get("status") not in ("running",)
+        ]
+        for sid in expired:
+            del sessions[sid]
+        if expired:
+            logger.info(f"Cleaned up {len(expired)} expired session(s)")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Starting background session cleanup task via lifespan.")
+    cleanup_task = asyncio.create_task(_cleanup_expired_sessions())
+    yield
+    logger.info("Shutting down background session cleanup task via lifespan.")
+    cleanup_task.cancel()
+    try:
+        await cleanup_task
+    except asyncio.CancelledError:
+        logger.info("Background session cleanup task cancelled.")
+
+
+app = FastAPI(title="Skill Optimizer API", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+
 class AnalyzeRequest(BaseModel):
     session_id: str
     gemini_api_key: str
@@ -496,51 +537,6 @@ async def health_check():
     return {"status": "healthy"}
 
 
-async def _cleanup_expired_sessions():
-    """Periodically remove sessions older than SESSION_TTL."""
-    while True:
-        await asyncio.sleep(300)  # every 5 minutes
-        now = time.time()
-        expired = [
-            sid for sid, s in sessions.items()
-            if now - s.get("created_at", now) > SESSION_TTL
-            and s.get("status") not in ("running",)
-        ]
-        for sid in expired:
-            del sessions[sid]
-        if expired:
-            logger.info(f"Cleaned up {len(expired)} expired session(s)")
-
-# This function is re-added to satisfy the validator that expects its presence.
-# Its original logic has been correctly migrated to the lifespan context manager.
-async def startup():
-    asyncio.create_task(_cleanup_expired_sessions())
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup logic: This replaces the @app.on_event("startup") decorator.
-    logger.info("Starting background session cleanup task via lifespan.")
-    cleanup_task = asyncio.create_task(_cleanup_expired_sessions())
-    yield
-    # Shutdown logic (optional, but good practice to cancel tasks)
-    logger.info("Shutting down background session cleanup task via lifespan.")
-    cleanup_task.cancel()
-    try:
-        await cleanup_task  # Await cancellation to ensure it's handled
-    except asyncio.CancelledError:
-        logger.info("Background session cleanup task cancelled.")
-
-
-app = FastAPI(lifespan=lifespan)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 if __name__ == "__main__":
